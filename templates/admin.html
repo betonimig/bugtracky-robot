@@ -1,0 +1,403 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>Control Panel</title>
+<meta http-equiv="content-type" content="text/html;charset=utf-8" />
+<style type="text/css">
+div,
+span,
+td {
+  font-family: arial, sans-serif;
+  font-size: 13px;
+}
+.buganizer-field,
+.header { font-weight: bold; }
+.buganizer-settings {
+  color: #00c;
+  cursor: pointer;
+  padding-left: 10px;
+  text-decoration: underline;
+}
+</style>
+<script type="text/javascript" src="http://bugtracky.appspot.com/static/jquery.js"></script>
+<script type="text/javascript" src="http://bugtracky.appspot.com/static/jsonrpc.js"></script>
+<script type="text/javascript" src="http://bugtracky.appspot.com/static/json2.js"></script>
+<script type="text/javascript">
+/**
+ * Type list of a bug.
+ * @type {Array}
+ */
+var bugType = [
+  'Bug',
+  'Feature',
+  'Customer Issue',
+  'Internal Cleanup',
+  'Process'
+];
+
+/**
+ * Status list of a bug.
+ * @type {Array}
+ */
+var bugStatus = [
+  'New',
+  'Assigned',
+  'In Progress',
+  'Internal Cleanup',
+  'Verify'
+];
+
+/**
+ * Priority range of a bug.
+ * @type {Array}
+ */
+var bugPriority = [3, 5, 10];
+
+/**
+ * Attributes of a bug.
+ * @type {Array}
+ */
+var attributes = [
+  'Status',
+  'Assignee',
+  'Type',
+  'Priority'
+];
+
+/**
+ * Retrieve settings for an attribute.
+ * @param {string} name Name of attribute element.
+ * @return {string} Comma separated values.
+ */
+function getSettings(name) {
+  var values = [];
+  var elements = document.getElementsByName(name);
+  for (var i = 0, len = elements.length; i < len; i++) {
+    var element = elements.item(i);
+    if (element.checked) {
+      values.push(i);
+    }
+  }
+  return values.join('|');
+}
+
+/**
+ * Submits the data to server.
+ * @param {Object} params Settings object.
+ */
+function submitDelta(params) {
+  var command = 'SAVE_CONFIG_PARAM';
+  var element = document.getElementById('buganizer-message');
+  element.style.display = '';
+  element.innerHTML = 'Saving in progress...'
+  var callback = function(jsonStr) {
+    var json = JSON.parse(jsonStr);
+    if (!parseInt(json.error)) {
+      element.innerHTML = 'Parameters saved successfully.'
+    } else {
+      element.innerHTML = 'Parameters are not saved due to technical problem.';
+    }
+  };
+  jsonrpc.makeRequest(command, params, callback);
+}
+
+/**
+ * Saves settings for bugtracky app.
+ */
+function saveSettings() {
+  var element = document.getElementById('option-status');
+  var statusValues = element.checked ? getSettings('chk-status') : '';
+  element = document.getElementById('option-type');
+  var typeValues = element.checked ? getSettings('chk-type') : '';
+
+  element = document.getElementById('option-priority');
+  var priortyValues = element.checked ? getSettings('opt-priority') : '';
+
+  var assignee = document.getElementById('option-assignee');
+  if (!statusValues) {
+    element = document.getElementById('buganizer-message');
+    element.style.display = '';
+    element.innerHTML =
+        '"Status" is mandatory field. Choose at least one attribute for it.';
+    element = document.getElementById('buganizer-admin');
+    element.style.display = '';
+    return;
+  }
+  var delta = {
+    'id': 'bugtracky',
+    'statusConfig': statusValues,
+    'assigneeConfig': assignee.checked ? '1' : '',
+    'typeConfig': typeValues,
+    'priorityConfig': priortyValues
+  };
+  submitDelta(delta);
+}
+
+/**
+ * Find the value in an array.
+ * @param {Array} source Source array.
+ * @param {string} value Value to be searched.
+ * @return {boolean} Returns true if value exists in array.
+ */
+function findValue(source, value) {
+  for (var i = 0, len = source.length; i < len; i++) {
+    if (source[i] == value) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Display settings for an attribute.
+ * @param {string} name Name of attribute element.
+ * @param {values} values to be set.
+ */
+function displaySettings(name, values) {
+  var source = values.split('|');
+  for (var i = 0, len = source.length; i < len; i++) {
+    var element = document.getElementById(name + source[i]);
+    if (element) {
+      element.checked = true;
+    }
+  }
+}
+
+/**
+ * Retrive settings for bugtracky.
+ * @param {Object} params Config parameters.
+ */
+function retrieveSettings(params) {
+  if (!params) {
+    return;
+  }
+  var element;
+  var lastUpdated = params['updatedBy'] || '';
+  document.getElementById('last-updated').innerHTML = lastUpdated;
+  var status = params['statusConfig'];
+  if (status) {
+    element = document.getElementById('option-status');
+    element.checked = true;
+    populateList(element, 'chk-status');
+    displaySettings('status-', status);
+  }
+  var type = params['typeConfig'];
+  if (type) {
+    element = document.getElementById('option-type');
+    element.checked = true;
+    populateList(element, 'chk-type');
+    displaySettings('type-', type);
+  }
+  var assignee = params['assigneeConfig'];
+  if (assignee) {
+    document.getElementById('option-assignee').checked = true;
+  }
+  var priority = params['priorityConfig'];
+  if (priority) {
+    element = document.getElementById('option-priority');
+    element.checked = true;
+    populateList(element, 'opt-priority');
+    displaySettings('P-', priority);
+  }
+}
+
+/**
+ * Enables/disables options for status.
+ * @param {Object} self Caller element.
+ * @param {string} Name of group to be enable or disable.
+ */
+function populateList(self, name) {
+  var elements = document.getElementsByName(name);
+  for (var i = 0, len = elements.length; i < len; i++) {
+    elements.item(i).disabled = !self.checked;
+  }
+}
+
+/**
+ * Pour the data in template string.
+ * @param {Object} dataObject The data object to be filled in template
+ *     string.
+ * @return {string} The new string created from template string and
+ *     filled with the given data.
+ */
+String.prototype.supplant = function(dataObject) {
+  // Replaces {key} with the corresponding value in object.
+  return this.replace(/{([^{}]+)}/g,
+    function(match, firstSubMatch) {
+      var replace = dataObject[firstSubMatch];
+      return (typeof replace === 'string' ||
+              typeof replace === 'number') ?
+          replace : match;
+    }
+  );
+};
+
+/**
+ * Makes config request to server.
+ */
+function makeConfigRequest() {
+  var command = 'GET_CONFIG_PARAM';
+  var element = document.getElementById('buganizer-message');
+  element.style.display = '';
+  element.innerHTML = 'Loading...'
+  var callback = function(jsonStr) {
+    var index = jsonStr.indexOf('{');
+    if (index == -1) {
+      element.innerHTML = 'Parameters are not loaded. Refresh the page.';
+      return;
+    }
+    jsonStr = jsonStr.substr(index);
+    var json = JSON.parse(jsonStr);
+    if (!parseInt(json.error)) {
+      element.style.display = 'none';
+      retrieveSettings(json);
+    } else {
+      element.innerHTML = 'Parameters are not loaded. Refresh the page.';
+    }
+  };
+  jsonrpc.makeRequest(command, {}, callback);
+}
+
+window.onload = makeConfigRequest;
+</script>
+</head>
+<body>
+<div id="logout">{{greetings}}</div>
+<div style="padding:15px 0 0 8px;">
+  Control panel for Bug Tracky[http://www.bugtracky.appspot.com/installer.xml]
+</div>
+<div style="padding:8px;color:#444;display:none">Last updated by:
+  <span id="last-updated" style="font-weight:bold;">{username}</span>
+</div>
+<div id="buganizer-message" style="padding:5px;color:#f00;text-align:center;font-size:12px;"></div>
+<div id="buganizer-admin" style="padding:8px;">
+  <div id="buganizer-message" style="color:#f00;font-size:12px;display:none;"></div>
+  <table width="100%" cellspacing="0" cellpadding="5" style="border:1px solid #ccc">
+      <tr>
+        <td width="110" align="left" style="border-bottom:1px solid #ddd;">
+          <input id="option-status" type="checkbox" value="" onClick="populateList(this, 'chk-status');" name="option-status" checked disabled=true/>&nbsp;
+          <span class="header">Status</span>
+        </td>
+        <td class="input" align="left" style="border-bottom:1px solid #ddd;">
+          <table cellspacing="0" cellpadding="5">
+            <tbody>
+              <tr>
+                <td align="center" width="100">
+                  <label for="new">New</label>
+                </td>
+                <td align="center" width="100">
+                  <label for="assigned">Assigned</label>
+                </td>
+                <td align="center" width="100">
+                  <label for="in progress">In Progress</label>
+                </td>
+                <td align="center" width="100">
+                  <label for="verify">Verify</label>
+                </td>
+              </tr>
+              <tr>
+                <td align="center">
+                  <input id="status-0" type="checkbox" value="0" name="chk-status"/>
+                </td>
+                <td align="center">
+                  <input id="status-1" type="checkbox" value="1" name="chk-status"/>
+                </td>
+                <td align="center">
+                  <input id="status-2" type="checkbox" value="2" name="chk-status"/>
+                </td>
+                <td align="center">
+                  <input id="status-3" type="checkbox" value="3" name="chk-status"/>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2" align="left" style="border-bottom:1px solid #ddd;height:60px">
+          <input id="option-assignee" type="checkbox" value="" name="option-assignee" />&nbsp;
+          <span class="header">Assignee</span>
+        </td>
+      </tr>
+      <tr id="row:verifier">
+        <td width="110" align="left" style="border-bottom:1px solid #ddd;">
+          <input id="option-type" type="checkbox" value="" onclick="populateList(this, 'chk-type');" name="option-type" />&nbsp;
+          <span class="header">Type</span>
+        </td>
+        <td style="border-bottom:1px solid #ddd;">
+          <table cellspacing="0" cellpadding="5">
+            <tbody>
+              <tr>
+                <td align="center" width="100">
+                  <label for="bug">Bug</label>
+                </td>
+                <td align="center" width="100">
+                  <label for="feature">Feature</label>
+                </td>
+                <td align="center" width="100">
+                  <label for="customer issue">Customer Issue</label>
+                </td>
+                <td align="center" width="100">
+                  <label for="internal cleanup">Internal Cleanup</label>
+                </td>
+                <td align="center" width="100">
+                  <label for="process">Process</label>
+                </td>
+              </tr>
+              <tr>
+                <td align="center">
+                  <input id="type-0" type="checkbox" value="0" name="chk-type" disabled="" />
+                </td>
+                <td align="center">
+                  <input id="type-1" type="checkbox" value="1" name="chk-type" disabled="" />
+                </td>
+                <td align="center">
+                  <input id="type-2" type="checkbox" value="2" name="chk-type" disabled="" />
+                </td>
+                <td align="center">
+                  <input id="type-3" type="checkbox" value="3" name="chk-type" disabled="" />
+                </td>
+                <td align="center">
+                  <input id="type-4" type="checkbox" value="4" name="chk-type" disabled="" />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </td>
+      </tr>
+      <tr id="row:priority">
+        <td class="name" width="118" align="left" style="height:60px">
+          <input id="option-priority" type="checkbox" value="" onclick="populateList(this, 'opt-priority');" name="option-priority" />&nbsp;
+          <span class="header">Priority Level:</span>
+        </td>
+        <td>
+          <table cellspacing="0" cellpadding="0" width="205">
+            <tbody>
+              <tr>
+                <td align="center"><label for="P-0">1 - 3</label></td>
+                <td align="center"><label for="P-1">1 - 5</label></td>
+                <td align="center"><label for="P-2">1 - 10</label></td>
+              </tr>
+              <tr>
+                <td align="center">
+                  <input type="radio" value="P0" id="P-0" name="opt-priority" disabled/>
+                </td>
+                <td align="center">
+                  <input type="radio" value="P1" id="P-1" name="opt-priority" disabled/>
+                </td>
+                <td align="center">
+                  <input type="radio" value="P2" id="P-2" name="opt-priority" disabled/>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </td>
+      </tr>
+  </table>
+  <div style="padding-top:5px">
+    <input type="button" value="Save" onclick="saveSettings();">&nbsp;
+    <input type="button" value="Restore" onclick="window.location.reload(true);">&nbsp;
+  </div>
+</div>
+</body>
+</html>

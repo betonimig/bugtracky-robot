@@ -1,0 +1,305 @@
+<Module>
+<ModulePrefs title="Issue Tracker"
+             description="Issue Tracker for wave."
+             height="400"
+             author="Gadgetfactory"
+             author_email="gadgetfactory@google.com">
+  <Require feature="wave" />
+  <Require feature="wave-preview" />
+  <Require feature="dynamic-height" />
+  <Require feature="views" />
+</ModulePrefs>
+<Content type="html">
+<![CDATA[
+<style type="text/css">
+div,
+span,
+td {
+  font-family: arial, sans-serif;
+  font-size: 13px;
+}
+.buganizer-field { font-weight: bold; }
+.main-content {
+  background-color: #c9e2fc;
+  border: 1px solid #ccc;
+}
+</style>
+<script>
+/**
+ * Mode of wave.
+ * @type {string}
+ */
+var waveMode = 'UNKNOWN';
+
+/**
+ * Id of bug.
+ * @type {string}
+ */
+var bugId;
+
+/**
+ * Fill fileds with user data.
+ */
+function fillUserData(forced) {
+  if (bugId == wave.getState().get('bugId')) {
+    return;
+  }
+  bugId = wave.getState().get('bugId');
+
+  var bugTitle = wave.getState().get('mytitle');
+  if (!bugTitle) {
+    return;
+  }
+
+  var status = wave.getState().get('status');
+  var type = wave.getState().get('type');
+  var assignee = wave.getState().get('assignee');
+
+  setSelectBoxValue('bug-status', status);
+  setSelectBoxValue('bug-type', type);
+  var element = _gel('bug-assignee');
+  if (element) {
+    element.value = parseInt(assignee) == -1 ? '' : assignee;
+  }
+
+  var priority = wave.getState().get('priority');
+  if (parseInt(priority) == -1) {
+    priority = 2;
+  }
+  var priorityElem = _gel('P' + priority);
+  if (priorityElem) {
+    priorityElem.checked = true;
+  }
+  _gel('parent-wave-id').value = wave.getState().get('parentWaveId');
+}
+
+/**
+* To set the default value for the given select box.
+* @param {string} elementId Select box element id.
+* @param {string} value Default value of the element.
+*/
+function setSelectBoxValue(elementId, value) {
+  var element = _gel(elementId);
+  if (!element) {
+    return;
+  }
+  var options = element.options;
+  for (var i = 0; i < options.length; i++) {
+    if (options[i].value == value) {
+      element.selectedIndex = i;
+      break;
+    }
+  }
+}
+
+/**
+ * To get the select box value for the given element id.
+ * @param {Element} element Select box element.
+ * @return {string} Value of the element.
+ */
+function getSelectBoxValue(element) {
+  var selectedOption = element.options[element.selectedIndex];
+  return selectedOption ? selectedOption.value : '';
+}
+
+/**
+ * Gets the priority of bug.
+ * @param {Element} radioObj Radio element for priority.
+ * @return {string} Selected  priority.
+ */
+function getPriority(radioObj) {
+  var radioLength = radioObj.length;
+  if (!radioLength) {
+    if (radioObj.checked) {
+      return radioObj.value.replace('P', '');
+    } else {
+      return '';
+    }
+  }
+  for (var i = 0; i < radioLength; i++) {
+    if (radioObj[i].checked) {
+      return radioObj[i].value.replace('P', '');
+    }
+  }
+  return '';
+}
+
+/**
+ * Creates bug and save the data.
+ */
+function createBug() {
+  var obj = {
+    'title': wave.getState().get('mytitle')
+  };
+  var element = _gel('bug-status');
+  if (element) {
+    obj.status = getSelectBoxValue(element) || 'New';
+  } else {
+    obj.status = '-1';
+  }
+  element = _gel('bug-type');
+  if (element) {
+    obj.type = getSelectBoxValue(element) || 'Bug';
+  } else {
+    obj.type = '-1';
+  }
+  element = _gel('bug-assignee');
+  if (element) {
+    var assignee = _trim(element.value);
+    obj.assignee = assignee;
+    if (element.value != assignee) {
+      element.value = assignee
+    }
+  } else {
+    obj.assignee = '-1';
+  }
+  element = _gel('bug-priority-table');
+  if (element) {
+    element = document.getElementsByName('bug-priority');
+    obj.priority = (element && getPriority(element)) || '2';
+  } else {
+    obj.priority = '-1';
+  }
+  wave.getState().submitDelta(obj);
+}
+
+/**
+ * Disables or enables the priority elements.
+ * @param {boolean} isDisable Flag indicates whether disable or enable
+ *     the priority fields.
+ */
+function disablePriority(isDisable) {
+  var radioObj = document.getElementsByName('bug-priority')
+  if (!radioObj) {
+    return;
+  }
+  var radioLength = radioObj.length;
+  if (radioLength == undefined) {
+    return;
+  }
+  for (var i = 0; i < radioLength; i++) {
+    radioObj[i].disabled = isDisable;
+  }
+}
+
+/**
+ * Callback for mode change of wave.
+ * @param {number} mode Mode of wave.
+ */
+function receiveMode(mode) {
+  var modeStr = 'UNKNOWN';
+  switch (mode) {
+    case wave.Mode.PLAYBACK:
+      modeStr = 'PLAYBACK';
+      break;
+    case wave.Mode.EDIT:
+      modeStr = 'EDIT';
+      break;
+    case wave.Mode.VIEW:
+      modeStr = 'VIEW';
+      break;
+  }
+
+  var disableFields = mode != wave.Mode.EDIT;
+  var element = _gel('bug-status');
+  if (element) {
+    _gel('bug-status').disabled = disableFields;
+  }
+  element = _gel('bug-type');
+  if (element) {
+    element.disabled = disableFields;
+  }
+  element = _gel('bug-assignee');
+  if (element) {
+    element.disabled = disableFields;
+  }
+  disablePriority(disableFields);
+  if (waveMode == 'EDIT' && modeStr == 'VIEW') {
+    createBug();
+  }
+  waveMode = modeStr;
+}
+
+/**
+ * Generates UI.
+ */
+function generateUI() {
+  var url = 'http://bugtracky.appspot.com/retrievesettings?' +
+      'cachebust=' + new Date().getMilliseconds();
+
+  var params = {};
+  params[gadgets.io.RequestParameters.CONTENT_TYPE] =
+      gadgets.io.ContentType.JSON;
+  params[gadgets.io.RequestParameters.METHOD] = gadgets.io.MethodType.POST;
+  gadgets.io.makeRequest(url, function(response) {
+    checkSettings(response.data);
+    wave.setStateCallback(fillUserData);
+    wave.setModeCallback(receiveMode);
+  }, params);
+
+}
+
+/**
+ * To be called on load.
+ */
+function init() {
+  // Verify the parent container.
+  if (!wave || !wave.isInWaveContainer()) {
+    return;
+  }
+  // gadgets.window.adjustHeight();
+  generateUI();
+}
+
+// Entry point.
+gadgets.util.registerOnLoadHandler(init);
+</script>
+<div id="main-content" class="main-content"></div>
+<div>
+  <input type="hidden" id="parent-wave-id" value="" />
+</div>
+<textarea id="tpl-bug-options" style="display:none">
+  <tr id="{id}-row">
+    <td width="70" align="right">
+      <span class="buganizer-field">{field}</span>
+    </td>
+    <td width="*">
+      <select id="{id}" style="width:130px" disabled>
+        {options}
+      </select>
+    </td>
+  </tr>
+</textarea>
+<textarea id="tpl-bug-assignee" style="display:none">
+  <tr id="{id}-row">
+    <td width="70" align="right">
+      <span class="buganizer-field">{field}</span>
+    </td>
+    <td width="*">
+      <input id="{id}" style="width:200px" name="owner" disabled/>
+    </td>
+  </tr>
+</textarea>
+<textarea id="tpl-bug-priority" style="display:none">
+  <tr id="{id}-row">
+    <td align="right">
+      <span class="buganizer-field">{field}</span>
+    </td>
+    <td>
+      <table width="150" id="bug-priority-table">
+        <tbody>
+          <tr>
+            {labels}
+          </tr>
+          <tr>
+            {values}
+          </tr>
+        </tbody>
+      </table>
+    </td>
+  </tr>
+</textarea>
+<script type="text/javascript" src="http://bugtracky.appspot.com/static/settings.js"></script>
+]]>
+</Content>
+</Module>

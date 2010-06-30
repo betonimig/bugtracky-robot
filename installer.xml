@@ -1,0 +1,20 @@
+<extension name="Bugtracky Robot"
+           description="Bugtracky for Google Wave."
+           thumbnailUrl="http://bugtracky.appspot.com/icon.png">
+  <author name="Dev Shop"/>
+  <menuHook location="newwavemenu"
+            text="New BugTracky Wave"
+            iconUrl="http://bugtracky.appspot.com/icon.png">
+     <addParticipants>
+      <participant id="bugtracky@appspot.com"/>
+    </addParticipants>
+  </menuHook>
+  <menuHook location="TOOLBAR"
+            text="Bugtracky for Google Wave"
+            iconUrl="http://bugtracky.appspot.com/icon.png">
+    <annotateSelection key="robot.bugtracky.request" value="google"/>
+    <addParticipants>
+      <participant id="bugtracky@appspot.com"/>
+    </addParticipants>
+  </menuHook>
+</extension>
