@@ -1,27 +1,38 @@
 <Module>
 <ModulePrefs title="Issue Tracker"
              description="Issue Tracker for wave."
-             height="400"
+             height="200"
              author="Gadgetfactory"
              author_email="gadgetfactory@google.com">
   <Require feature="wave" />
-  <Require feature="wave-preview" />
   <Require feature="dynamic-height" />
   <Require feature="views" />
 </ModulePrefs>
 <Content type="html">
 <![CDATA[
+<script 
+  src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.1/jquery.min.js"></script> 
+<script 
+  src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8/jquery-ui.min.js"></script>
+<script type="text/javascript" src="{{server}}/js/usernames.js"></script>
+<script type="text/javascript" src="{{server}}/js/settings.js"></script>
 <style type="text/css">
-div,
-span,
-td {
-  font-family: arial, sans-serif;
-  font-size: 13px;
+#main-content {
+  border: 1px solid #5590D2;
+  margin-bottom: 5px;
 }
-.buganizer-field { font-weight: bold; }
-.main-content {
-  background-color: #c9e2fc;
-  border: 1px solid #ccc;
+input[type=text] {
+  width: 200px;
+}
+.fieldlabel {
+  font-weight: bold;
+}
+.ui-autocomplete {
+  background-color: white;
+  border: 1px solid black;
+  width: 200px;
+  max-height: 66px;
+  overflow: hidden;
 }
 </style>
 <script>
@@ -127,7 +138,7 @@ function getPriority(radioObj) {
 /**
  * Creates bug and save the data.
  */
-function createBug() {
+function createIssue() {
   var obj = {
     'title': wave.getState().get('mytitle')
   };
@@ -215,7 +226,7 @@ function receiveMode(mode) {
   }
   disablePriority(disableFields);
   if (waveMode == 'EDIT' && modeStr == 'VIEW') {
-    createBug();
+    createIssue();
   }
   waveMode = modeStr;
 }
@@ -224,20 +235,75 @@ function receiveMode(mode) {
  * Generates UI.
  */
 function generateUI() {
-  var url = 'http://bugtracky.appspot.com/retrievesettings?' +
-      'cachebust=' + new Date().getMilliseconds();
-
-  var params = {};
-  params[gadgets.io.RequestParameters.CONTENT_TYPE] =
-      gadgets.io.ContentType.JSON;
-  params[gadgets.io.RequestParameters.METHOD] = gadgets.io.MethodType.POST;
-  gadgets.io.makeRequest(url, function(response) {
-    checkSettings(response.data);
-    wave.setStateCallback(fillUserData);
-    wave.setModeCallback(receiveMode);
-  }, params);
-
+var html = '<table cellspacing="5" cellpadding="5" width="100%">';
+  for (var i = 0; i < fields.length; i++) {
+    var field = fields[i];
+    html += getOptionHtml(field.label, field.values, field.type);
+  }
+  html += '</table>';
+  _gel('main-content').innerHTML = html;
+  gadgets.window.adjustHeight();
+  window.setTimeout(function() {
+    $("input#bug-assignee").autocomplete({
+      source: usernames
+    });
+  }, 10);
 }
+
+/**
+ * Returns html string for options
+ * @param {string} values Comma separated values.
+ */
+function getOptionHtml(label, values, type) {
+  var html = '';
+  var tplHtml = '';
+  var tplData = {
+    id: 'bug-' + label.toLowerCase(),
+    field: label + ':'
+  };
+
+  if (type == 'text') {
+    tplHtml = _gel('tpl-bug-text').value;
+  } else if (type == 'dropdown') {
+    tplHtml = document.getElementById('tpl-bug-dropdown').value;
+    for (var i = 0, len = values.length; i < len; i++) {
+      html += '<option value="' + values[i] + '">' + values[i] + '</option>';
+    }
+    tplData.options = html;
+  } else if (type == 'radio') { // Priority
+    tplHtml = _gel('tpl-bug-radio').value;
+    var labelsHtml = '', valuesHtml = '';
+    for (var i = 0, len = values.length; i < len; i++) {
+      labelsHtml += '<td align="center"><label for="P' + i +
+          '">P' + i + '</label></td>';
+      valuesHtml += '<td align="center"><input type="radio" value="P' + i +
+          '" id="P' + i + '" name="bug-priority" disabled/>';
+    }
+    tplData.labels = labelsHtml;
+    tplData.values = valuesHtml;
+  }
+
+  return tplHtml.supplant(tplData);
+}
+
+/**
+ * Pour the data in template string.
+ * @param {Object} dataObject The data object to be filled in template
+ *     string.
+ * @return {string} The new string created from template string and
+ *     filled with the given data.
+ */
+String.prototype.supplant = function(dataObject) {
+  // Replaces {key} with the corresponding value in object.
+  return this.replace(/{([^{}]+)}/g,
+    function(match, firstSubMatch) {
+      var replace = dataObject[firstSubMatch];
+      return (typeof replace === 'string' ||
+              typeof replace === 'number') ?
+          replace : match;
+    }
+  );
+};
 
 /**
  * To be called on load.
@@ -247,21 +313,24 @@ function init() {
   if (!wave || !wave.isInWaveContainer()) {
     return;
   }
-  // gadgets.window.adjustHeight();
+  wave.ui.loadCss();
   generateUI();
+  wave.setStateCallback(fillUserData);
+  wave.setModeCallback(receiveMode);
 }
 
 // Entry point.
 gadgets.util.registerOnLoadHandler(init);
 </script>
-<div id="main-content" class="main-content"></div>
-<div>
-  <input type="hidden" id="parent-wave-id" value="" />
+<br>
+<input type="hidden" id="parent-wave-id" value="" style="display:none"/>
+<div id="main-content">
 </div>
-<textarea id="tpl-bug-options" style="display:none">
+<br><br><br>
+<textarea id="tpl-bug-dropdown" style="display:none">
   <tr id="{id}-row">
     <td width="70" align="right">
-      <span class="buganizer-field">{field}</span>
+      <span class="fieldlabel">{field}</span>
     </td>
     <td width="*">
       <select id="{id}" style="width:130px" disabled>
@@ -270,20 +339,20 @@ gadgets.util.registerOnLoadHandler(init);
     </td>
   </tr>
 </textarea>
-<textarea id="tpl-bug-assignee" style="display:none">
+<textarea id="tpl-bug-text" style="display:none">
   <tr id="{id}-row">
     <td width="70" align="right">
-      <span class="buganizer-field">{field}</span>
+      <span class="fieldlabel">{field}</span>
     </td>
     <td width="*">
       <input id="{id}" style="width:200px" name="owner" disabled/>
     </td>
   </tr>
 </textarea>
-<textarea id="tpl-bug-priority" style="display:none">
+<textarea id="tpl-bug-radio" style="display:none">
   <tr id="{id}-row">
     <td align="right">
-      <span class="buganizer-field">{field}</span>
+      <span class="fieldlabel">{field}</span>
     </td>
     <td>
       <table width="150" id="bug-priority-table">
@@ -299,7 +368,6 @@ gadgets.util.registerOnLoadHandler(init);
     </td>
   </tr>
 </textarea>
-<script type="text/javascript" src="http://bugtracky.appspot.com/static/settings.js"></script>
 ]]>
 </Content>
 </Module>

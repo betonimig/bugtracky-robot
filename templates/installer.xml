@@ -1,0 +1,19 @@
+<extension name="Issue Tracker"
+           description="Lets you track and discuss issues in Wave."
+           thumbnailUrl="{{ avatar_url }}">
+  <author name="Google"/>
+  <menuHook location="newwavemenu"
+           text="Issue Report">
+    <addParticipants>
+       <participant id="{{ robot_address }}"/>
+    </addParticipants>
+  </menuHook>
+  <menuHook location="TOOLBAR"
+            text="Create issue"
+            iconUrl="{{ icon_url }}">
+    <annotateSelection key="{{ robot_key }}" value="google"/>
+    <addParticipants>
+      <participant id="{{ robot_address }}"/>
+    </addParticipants>
+  </menuHook>
+</extension>

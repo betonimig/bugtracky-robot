@@ -1,36 +1,21 @@
-application: bugtracky
+application: issue-tracker-robot
 version: 1
 runtime: python
 api_version: 1
 
 handlers:
 
-- url: /static
-  static_dir: static
+- url: /js
+  static_dir: js
 
-- url: /controlpanel
-  script: main.py
-  login: admin
-
-- url: /buganizer.xml
-  static_files: buganizer.xml
-  upload: buganizer.xml
-  mime_type: text/xml
-
-- url: /installer.xml
-  static_files: installer.xml
-  upload: installer.xml
-  mime_type: text/xml
-
-- url: /icon.png
-  static_files: icon.png
-  upload: icon.png
-
-- url: /_wave/verify_token.*
-  script: main.py
+- url: /img
+  static_dir: img
 
 - url: /_wave/.*
-  script: buganizer.py
+  script: robot.py
+
+- url: /web
+  script: main.py
 
 - url: .*
   script: main.py

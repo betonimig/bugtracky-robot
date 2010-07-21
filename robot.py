@@ -1,6 +1,6 @@
 #!/usr/bin/python2.5
 #
-# Copyright 2010 Google Inc. All Rights Reserved.
+# Copyright 2010 Google Inc.
 """Robot that creates a wave for an issue."""
 
 import time
@@ -10,70 +10,36 @@ from waveapi import appengine_robot_runner
 from waveapi import element
 from waveapi import events
 from waveapi import robot
-
 from google.appengine.ext import db
-from admin import AdminServer
+from google.appengine.api.urlfetch import DownloadError 
 
-CONSUMER_KEY = 'CONSUMER_KEY'
-CONSUMER_SECRET = 'CONSUMER_SECRET'
-ROBOT_KEY = 'robot.bugtracky.request'
-ROBOT_ID = u'bugtracky@appspot.com'
-BUG_KEY = 'robot.bugtracky.id'
-SANDBOX_RPC_BASE = 'http://sandbox.gmodules.com/api/rpc'
-PREVIEW_RPC_BASE = 'http://gmodules.com/api/rpc'
-GADGET_URL = 'http://bugtracky.appspot.com/buganizer.xml'
-ICON = 'http://bugtracky.appspot.com/icon.png'
-
+import common
+import credentials
 
 def OnAnnotationChanged(event, wavelet):
-  logging.error('OnAnnotationChanged')
   """Called when the annotation changes."""
   blip = event.blip
   todo = []
 
   for ann in blip.annotations:
-    if ann.name == ROBOT_KEY:
+    if ann.name == common.ROBOT_KEY:
       todo.append((ann.start, ann.end))
 
-  query = 'Select * from Item WHERE project_id=\'bugtracky\''
-  items = db.GqlQuery(query)
-  status = ''
-  assignee = ''
-  type = ''
-  priority = ''
-  for row in items:
-    status = str(row.status_config)
-    assignee = str(row.assignee_config)
-    type = str(row.type_config)
-    priority = str(row.priority_config)
-
   msgtext = ''
-  if assignee != '':
-    assignee = event.modified_by
-    msgtext = ' (Assigned: ' + event.modified_by
+  assignee = event.modified_by
+  msgtext = ' (Assigned: ' + event.modified_by
+  status = 'New'
+  if msgtext == '':
+    msgtext = ' ('
   else:
-    assignee = '-1'
-  if status != '':
-    status = 'New'
-    if msgtext == '':
-      msgtext = ' ('
-    else:
-      msgtext = msgtext + ', '
-    msgtext = msgtext + 'Status: ' + status + ') '
-  else:
-    status = '-1'
-  if priority != '':
-    priority = '2'
-  else:
-    priority = '-1'
-  if type != '':
-    type = 'bug'
-  else:
-    type = '-1'
+    msgtext = msgtext + ', '
+  msgtext = msgtext + 'Status: ' + status + ') '
+  priority = '2'
+  type = 'bug'
 
-  bug_robot.setup_oauth(CONSUMER_KEY,
-                        CONSUMER_SECRET,
-                        server_rpc_base=SANDBOX_RPC_BASE)
+  bug_robot.setup_oauth(credentials.KEY,
+                        credentials.SECRET,
+                        common.GetRPCBase(wavelet.domain))
   new_wave = ''
   bug_id = wavelet.wave_id + '||' + str(time.time())
   props = {
@@ -82,49 +48,47 @@ def OnAnnotationChanged(event, wavelet):
       'parentWaveletId': wavelet.wavelet_id,
       'priority': priority,
       'status': status,
-      'assignee': event.modified_by or 'Unknown'
+      'assignee': event.modified_by or ''
   }
 
   for start, end in todo:
-    blip.range(start, end).clear_annotation(ROBOT_KEY)
+    blip.range(start, end).clear_annotation(common.ROBOT_KEY)
     new_participants = list(wavelet.participants)[:]
-    new_participants.remove(ROBOT_ID)
     selected = blip.range(start, end).value()
     new_wave = bug_robot.new_wave(wavelet.domain,
                                   new_participants,
                                   wavelet.serialize(),
                                   submit=True)
-    new_blip = new_wave.root_blip
-    props['mytitle'] = 'Issue: ' + selected
-    new_blip.append_markup('<b>Issue: ' + selected + '</b> ( '
-                           '<a style="float:right" href="#restored:wave:' +
-                           wavelet.wave_id.replace('+', '%252B', 1) +
-                           '">Reference wave</a> ) ')
-    new_blip.append(' \n ');
-
-    # Update tags of current wave.
+    title = 'Issue: %s' % selected
+    props['mytitle'] = title
+    new_wave.title = title
     UpdateTags(new_wave, status, type, assignee, priority)
-    new_blip.append(element.Gadget(GADGET_URL, props))
-    new_blip.append('\n[Add Description here]')
+
+    # Add contents to blip
+    new_blip = new_wave.root_blip
+    new_blip.append('(Reference Wave)', bundled_annotations=[('link/wave', wavelet.wave_id)])
+    new_blip.append('\n', bundled_annotations=[('link/wave', None)])
+    new_blip.append(element.Gadget(common.GetGadgetUrl(), props))
+    new_blip.append('\nDescription:', [('style/fontWeight', 'bold')])
+    new_blip.append('\n', [])
     bug_robot.submit(new_wave)
+
+    # Update blip in parent wave
     link_text = ''.join([selected, msgtext])
     blip.range(start, end).replace(link_text)
     blip.range(start, end).annotate('link/wave', new_wave.wave_id)
     bug_start = end + 1
     bug_end = start + len(link_text)
-    blip.range(bug_start, bug_end).annotate(BUG_KEY, bug_id)
+    blip.range(bug_start, bug_end).annotate(common.BUG_KEY, bug_id)
 
   if new_wave == '':
-    props['mytitle'] = 'Issue: '
-    UpdateTags(wavelet, status, type, assignee, priority)
+    wavelet.title = 'Issue: '
     new_blip = wavelet.root_blip
-    new_blip.append_markup('<b>Issue: [ Set title here ]</b> ')
-    new_blip.append(' \n ');
-    new_blip.append(element.Gadget(GADGET_URL, props))
-    new_blip.append('\n[Add Description here]')
+    new_blip.append(element.Gadget(common.GetGadgetUrl()))
+    new_blip.append('\nDescription:', [('style/fontWeight', 'bold')])
+    new_blip.append('\n', [])
 
 def UpdateTags(wavelet, status, bugtype, assignee, priority):
-  logging.error('updatetages:-' + status + ':' + bugtype + ':' + assignee + ':' + priority)
   if str(status) != '-1':
     wavelet.tags.append('Status=' + status)
   if str(bugtype) != '-1':
@@ -134,36 +98,42 @@ def UpdateTags(wavelet, status, bugtype, assignee, priority):
   if str(priority) != '-1':
     wavelet.tags.append('Priority=' + priority)
 
+
 def OnGadgetStateChanged(event, wavelet):
   """Callback function for any change in gadget state."""
-  logging.error('state changed')
   blip = event.blip
-  gadget = blip.first(element.Gadget, url=GADGET_URL)
+  gadget = blip.first(element.Gadget, url=common.GetGadgetUrl())
   tag_list = wavelet.tags.serialize()
-  logging.error(tag_list)
   for tag in tag_list:
     wavelet.tags.remove(tag)
   UpdateTags(wavelet,
              gadget.status,
-             gadget.type,
+             gadget.get('type'),
              gadget.assignee,
              gadget.priority)
 
-  logging.error(wavelet.tags.serialize())
-  wave_id = gadget.parentWaveId
-  wavelet_id = gadget.parentWaveletId
-  bug_id = gadget.bugId
+  # Add assignee to the wave
   participant_id = gadget.assignee
-  bug_robot.setup_oauth(CONSUMER_KEY,
-                        CONSUMER_SECRET,
-                       server_rpc_base='http://sandbox.gmodules.com/api/rpc')
-  parent_wavelet = bug_robot.fetch_wavelet(wave_id, wavelet_id)
-  logging.error('parent waveid: ')
-  logging.error(parent_wavelet)
   if str(participant_id) != '-1':
     AddParticipant(wavelet, participant_id)
-  parent_status = GetBugStatus(gadget.assignee, gadget.status)
-  UpdateParentWave(parent_wavelet, bug_id, parent_status)
+
+  # Attempt to update parent wave if exists
+  wave_id = gadget.get('parentWaveId')
+  if wave_id is None:
+    return
+
+  bug_robot.setup_oauth(credentials.KEY,
+                        credentials.SECRET,
+                        common.GetRPCBase(wavelet.domain))
+  try:
+    bug_id = gadget.get('bugId')
+    wavelet_id = gadget.get('parentWaveletId')
+    parent_wavelet = bug_robot.fetch_wavelet(wave_id, wavelet_id)
+    parent_status = GetBugStatus(gadget.assignee, gadget.status)
+    UpdateParentWave(parent_wavelet, bug_id, parent_status)
+  except DownloadError:
+    logging.info('Problem fetching wave %s' % wave_id)
+
 
 
 def AddParticipant(wavelet, participant_id):
@@ -175,12 +145,13 @@ def AddParticipant(wavelet, participant_id):
 def GetDisplayMessage(gadget):
   return ''.join(['\nTitle=', gadget.title,
                   '\nStatus=', gadget.status,
-                  '\nType=', gadget.type,
+                  '\nType=', gadget.get('type'),
                   '\nSAssignee=', gadget.assignee,
                   '\nPriority=', gadget.priority])
 
 
 def GetBugStatus(assignee, status):
+  """Get bug status text to display in parent wave."""
   msg = ''
   if str(assignee) != '-1':
     msg = ' (Assigned: ' + assignee
@@ -191,8 +162,6 @@ def GetBugStatus(assignee, status):
     else:
       msg = msg + ', '
     msg = msg + 'Status: ' + status + ') '
-
-  """Get bug status text to display in parent wave."""
   return msg
 
 def UpdateParentWave(parent_wavelet, bug_id, status):
@@ -202,20 +171,21 @@ def UpdateParentWave(parent_wavelet, bug_id, status):
     blip = parent_wavelet.blips[blip_id]
     todo = []
     for ann in blip.annotations:
-      if ann.name == BUG_KEY and ann.value == bug_id:
+      if ann.name == common.BUG_KEY and ann.value == bug_id:
         todo.append((ann.start, ann.end))
     for start, end in todo:
-      blip.range(start, end).clear_annotation(BUG_KEY)
+      blip.range(start, end).clear_annotation(common.BUG_KEY)
       blip.range(start, end).replace(status)
-      blip.range(start, start + len_status).annotate(BUG_KEY, bug_id)
+      blip.range(start, start + len_status).annotate(common.BUG_KEY, bug_id)
   bug_robot.submit(parent_wavelet)
 
 
 if __name__ == '__main__':
-  bug_robot = robot.Robot('Bugtracky', image_url=ICON, profile_url='')
+  bug_robot = robot.Robot('Bugtracky', image_url=common.GetAvatarUrl(),
+                          profile_url=common.GetServer())
   bug_robot.register_handler(events.WaveletSelfAdded, OnAnnotationChanged)
   bug_robot.register_handler(events.AnnotatedTextChanged,
                              OnAnnotationChanged,
-                             filter=ROBOT_KEY)
+                             filter=common.ROBOT_KEY)
   bug_robot.register_handler(events.GadgetStateChanged, OnGadgetStateChanged)
   appengine_robot_runner.run(bug_robot, debug=True)
