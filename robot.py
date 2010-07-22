@@ -1,6 +1,3 @@
-#!/usr/bin/python2.5
-#
-# Copyright 2010 Google Inc.
 """Robot that creates a wave for an issue."""
 
 import time
@@ -181,7 +178,7 @@ def UpdateParentWave(parent_wavelet, bug_id, status):
 
 
 if __name__ == '__main__':
-  bug_robot = robot.Robot('Bugtracky', image_url=common.GetAvatarUrl(),
+  bug_robot = robot.Robot('Issue Tracker', image_url=common.GetAvatarUrl(),
                           profile_url=common.GetServer())
   bug_robot.register_handler(events.WaveletSelfAdded, OnAnnotationChanged)
   bug_robot.register_handler(events.AnnotatedTextChanged,

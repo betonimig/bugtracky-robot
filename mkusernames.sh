@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Can be used for auto-generating usernames.js
+# based on contents of a mailing list
 
 EXPN=/usr/local/symlinks/expn
 JS=js/usernames.js

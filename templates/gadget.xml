@@ -242,12 +242,20 @@ var html = '<table cellspacing="5" cellpadding="5" width="100%">';
   }
   html += '</table>';
   _gel('main-content').innerHTML = html;
+
+  // If usernames variable exists, use it to autocomplete
+  // See usernames.js
+  if (usernames) {
+   $("input#bug-assignee").autocomplete({
+    source: usernames
+   });
+  }
+
+  // adjustHeight after a timeout, due to loadCss taking time
   gadgets.window.adjustHeight();
   window.setTimeout(function() {
-    $("input#bug-assignee").autocomplete({
-      source: usernames
-    });
-  }, 10);
+    gadgets.window.adjustHeight()
+  }, 1000);
 }
 
 /**
