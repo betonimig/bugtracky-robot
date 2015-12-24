@@ -1,0 +1,1 @@
+Lets you create new issue reports from inside Wave, via selecting text or using the New Wave menu.
