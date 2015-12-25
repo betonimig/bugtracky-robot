@@ -1,4 +1,4 @@
-Issue Tracker robot for Google Wave(http://wiab.pro)
+Issue Tracker robot for Google Wave/Apache Wave(http://wiab.pro)
 ====================================================
 
 To deploy your own version of this,you should only need to do the following:
